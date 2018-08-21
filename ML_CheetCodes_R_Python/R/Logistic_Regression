@@ -1,0 +1,199 @@
+
+---
+title: "R Notebook"
+output: html_notebook
+---
+Logistic Regression
+```{r}
+credit<-read.csv('C:\\Users\\Gaya\\Desktop\\R\\EDX_Scripts\\Principles-of-Machine-Learning-R-master\\Module4\\German_Credit_Preped.csv',stringsAsFactors = F)
+
+str(credit)
+```
+```{r}
+library(caret)
+library(dplyr)
+library(MASS)
+library(Metrics)
+```
+ IMPORTANT before modeling anything in classification we need to look at class distribution in our target variable
+
+Let's make factorize bad credits feature for avoiding future problems
+```{r}
+credit$bad_credit<-factor(credit$bad_credit, levels = c(0, 1), labels = c('No','Yes'))
+
+levels(credit$bad_credit)
+
+as.numeric(credit$bad_credit)
+
+str(credit$bad_credit)
+
+table(credit$bad_credit)
+```
+ Not good there are more than twice 'good' bank customers as we have 'bad' customer (i.e. bad means defaulted and from bank perspective they are 'bad' ).. This is really nasty situation as we shoud predict more precisely bad customers as risks and costs asssociated with a bad customers are higher compared to leaving oner good customer.In practice we will use imputation and other balancing techniques.... or another approach may be adjusting model at the ned towards precisely predicting exactly this class!!!! We will use second approach in this case!!
+
+```{r}
+ind<-createDataPartition(credit$bad_credit,p=0.70,list = F)
+
+credit1<-credit%>%
+  dplyr::select(-Customer_ID)
+
+dim(credit1)
+```
+
+# credit1$bad_credit<-ifelse(credit1$bad_credit==1,'bad','good')
+# credit1$bad_credit<-factor(credit1$bad_credit,levels=c('bad','good'))
+# credit1$bad_credit
+# 
+# str(credit1)
+# ### Transforming into dummies except bad_credit feature using dummyVars from caret
+# 
+# dummies<-dummyVars(bad_credit~., data=credit1)
+# credit_dummies<-data.frame(predict(dummies,newdata=credit1))
+# 
+# near_zero = nearZeroVar(credit_dummies, freqCut = 95/5, uniqueCut = 10, saveMetrics = TRUE)
+# low_variance_cols <- near_zero[(near_zero$zeroVar == TRUE) | (near_zero$nzv == TRUE), ]
+# low_variance_cols
+
+As we see no big resultfrom using this nearZeroVar funtion from caret but anyway useful feature!!!!
+
+```{r}
+credit_train<-credit1[ind,]
+credit_test<-credit1[-ind,]
+
+colnames(credit_train)
+
+mod1<-glm(bad_credit~.,data=credit_train,family = 'binomial')
+
+mod2<-stepAIC(mod1,method='both')
+
+mod2$anova
+
+summary(mod2)
+```
+Let's analyse the model that we got
+
+```{r}
+unique(credit_train$payment_pcnt_income)
+
+colnames(credit_train)
+mod3<-glm(bad_credit~checking_account_status+loan_duration_mo+credit_history+purpose+loan_amount+
+            other_signators+number_loans+gender_status,data=credit_train,family='binomial')
+
+summary(mod3)
+```
+```{r}
+train_pred<-predict(mod3,newdata = credit_train,type='response')
+
+train_pred<-ifelse(train_pred>0.5,1,0)
+
+table(train_pred,credit_train$bad_credit)
+
+table(train_pred)
+
+train_pred<-factor(train_pred, levels = c(0, 1), labels = c('No','Yes'))
+
+levels(train_pred)
+
+as.numeric(train_pred)
+
+str(train_pred)
+
+accuracy(actual = credit_train$bad_credit,predicted = train_pred)
+
+confusionMatrix(train_pred,credit_train$bad_credit,positive = 'Yes')
+```
+
+As we know our priority should be the correct classification of bad credits, which have high risks of defaulting.
+The measure of bad credits with Yes status is Sensitivity and we should improve it from the current result of 52%
+
+```{r}
+credit_train<-credit1[ind,]
+credit_test<-credit1[-ind,]
+
+colnames(credit_train)
+
+mod1<-glm(bad_credit~.,data=credit_train,family = 'binomial')
+
+mod2<-stepAIC(mod1,method='both')
+
+mod2$anova
+
+summary(mod2)
+```
+
+Let's analyse the model that we got
+
+```{r}
+unique(credit_train$payment_pcnt_income)
+
+colnames(credit_train)
+mod3<-glm(bad_credit~checking_account_status+loan_duration_mo+credit_history+purpose+loan_amount+
+            other_signators+number_loans+gender_status,data=credit_train,family='binomial')
+
+summary(mod3)
+```
+```{r}
+train_pred<-predict(mod3,newdata = credit_train,type='response')
+
+library(ROCR)
+P_train<-prediction(train_pred,credit_train$bad_credit)
+perf<-performance(P_train,'tpr','fpr')
+
+plot(perf,colorize=T)
+
+performance(P_train,'auc')@y.values
+```
+
+```{r}
+train_pred<-ifelse(train_pred>0.25,1,0)
+
+table(train_pred,credit_train$bad_credit)
+
+table(train_pred)
+
+train_pred<-factor(train_pred, levels = c(0, 1), labels = c('No','Yes'))
+
+levels(train_pred)
+
+as.numeric(train_pred)
+
+str(train_pred)
+
+accuracy(actual = credit_train$bad_credit,predicted = train_pred)
+
+confusionMatrix(train_pred,credit_train$bad_credit,positive = 'Yes')
+```
+
+Let's eventually test our model
+```{r}
+pred_test<-predict(mod3,newdata = credit_test,type='response')
+
+library(ROCR)
+P_test<-prediction(pred_test,credit_test$bad_credit)
+perf<-performance(P_test,'tpr','fpr')
+
+plot(perf,colorize=T)
+
+performance(P_test,'auc')@y.values
+```
+```{r}
+pred_test<-ifelse(pred_test>0.25,1,0)
+
+table(pred_test,credit_test$bad_credit)
+
+table(pred_test)
+
+pred_test<-factor(pred_test, levels = c(0, 1), labels = c('No','Yes'))
+
+levels(pred_test)
+
+as.numeric(pred_test)
+
+str(pred_test)
+
+accuracy(actual = credit_test$bad_credit,predicted = pred_test)
+
+confusionMatrix(pred_test,credit_test$bad_credit,positive = 'Yes')
+```
+
+As a matter of fact confusion matrix that we get in Python is different in positions so not be fooled!!!!
